@@ -53,36 +53,37 @@ const (
 )
 
 type Config struct {
-	Server                  ServerConfig                  `mapstructure:"server"`
-	Log                     LogConfig                     `mapstructure:"log"`
-	CORS                    CORSConfig                    `mapstructure:"cors"`
-	Security                SecurityConfig                `mapstructure:"security"`
-	Billing                 BillingConfig                 `mapstructure:"billing"`
-	Turnstile               TurnstileConfig               `mapstructure:"turnstile"`
-	Database                DatabaseConfig                `mapstructure:"database"`
-	Redis                   RedisConfig                   `mapstructure:"redis"`
-	Ops                     OpsConfig                     `mapstructure:"ops"`
-	JWT                     JWTConfig                     `mapstructure:"jwt"`
-	Totp                    TotpConfig                    `mapstructure:"totp"`
-	LinuxDo                 LinuxDoConnectConfig          `mapstructure:"linuxdo_connect"`
-	Default                 DefaultConfig                 `mapstructure:"default"`
-	RateLimit               RateLimitConfig               `mapstructure:"rate_limit"`
-	Pricing                 PricingConfig                 `mapstructure:"pricing"`
-	Gateway                 GatewayConfig                 `mapstructure:"gateway"`
-	APIKeyAuth              APIKeyAuthCacheConfig         `mapstructure:"api_key_auth_cache"`
-	SubscriptionCache       SubscriptionCacheConfig       `mapstructure:"subscription_cache"`
-	SubscriptionMaintenance SubscriptionMaintenanceConfig `mapstructure:"subscription_maintenance"`
-	Dashboard               DashboardCacheConfig          `mapstructure:"dashboard_cache"`
-	DashboardAgg            DashboardAggregationConfig    `mapstructure:"dashboard_aggregation"`
-	UsageCleanup            UsageCleanupConfig            `mapstructure:"usage_cleanup"`
-	Concurrency             ConcurrencyConfig             `mapstructure:"concurrency"`
-	TokenRefresh            TokenRefreshConfig            `mapstructure:"token_refresh"`
-	Sora                    SoraConfig                    `mapstructure:"sora"`
-	RunMode                 string                        `mapstructure:"run_mode" yaml:"run_mode"`
-	Timezone                string                        `mapstructure:"timezone"` // e.g. "Asia/Shanghai", "UTC"
-	Gemini                  GeminiConfig                  `mapstructure:"gemini"`
-	Update                  UpdateConfig                  `mapstructure:"update"`
-	Idempotency             IdempotencyConfig             `mapstructure:"idempotency"`
+	Server                   ServerConfig                   `mapstructure:"server"`
+	Log                      LogConfig                      `mapstructure:"log"`
+	CORS                     CORSConfig                     `mapstructure:"cors"`
+	Security                 SecurityConfig                 `mapstructure:"security"`
+	Billing                  BillingConfig                  `mapstructure:"billing"`
+	Turnstile                TurnstileConfig                `mapstructure:"turnstile"`
+	Database                 DatabaseConfig                 `mapstructure:"database"`
+	Redis                    RedisConfig                    `mapstructure:"redis"`
+	Ops                      OpsConfig                      `mapstructure:"ops"`
+	JWT                      JWTConfig                      `mapstructure:"jwt"`
+	Totp                     TotpConfig                     `mapstructure:"totp"`
+	LinuxDo                  LinuxDoConnectConfig           `mapstructure:"linuxdo_connect"`
+	Default                  DefaultConfig                  `mapstructure:"default"`
+	RateLimit                RateLimitConfig                `mapstructure:"rate_limit"`
+	Pricing                  PricingConfig                  `mapstructure:"pricing"`
+	Gateway                  GatewayConfig                  `mapstructure:"gateway"`
+	APIKeyAuth               APIKeyAuthCacheConfig          `mapstructure:"api_key_auth_cache"`
+	SubscriptionCache        SubscriptionCacheConfig        `mapstructure:"subscription_cache"`
+	SubscriptionMaintenance  SubscriptionMaintenanceConfig  `mapstructure:"subscription_maintenance"`
+	Dashboard                DashboardCacheConfig           `mapstructure:"dashboard_cache"`
+	DashboardAgg             DashboardAggregationConfig     `mapstructure:"dashboard_aggregation"`
+	UsageCleanup             UsageCleanupConfig             `mapstructure:"usage_cleanup"`
+	Concurrency              ConcurrencyConfig              `mapstructure:"concurrency"`
+	TokenRefresh             TokenRefreshConfig             `mapstructure:"token_refresh"`
+	AccountConnectivityProbe AccountConnectivityProbeConfig `mapstructure:"account_connectivity_probe"`
+	Sora                     SoraConfig                     `mapstructure:"sora"`
+	RunMode                  string                         `mapstructure:"run_mode" yaml:"run_mode"`
+	Timezone                 string                         `mapstructure:"timezone"` // e.g. "Asia/Shanghai", "UTC"
+	Gemini                   GeminiConfig                   `mapstructure:"gemini"`
+	Update                   UpdateConfig                   `mapstructure:"update"`
+	Idempotency              IdempotencyConfig              `mapstructure:"idempotency"`
 }
 
 type LogConfig struct {
@@ -199,6 +200,31 @@ type TokenRefreshConfig struct {
 	RetryBackoffSeconds int `mapstructure:"retry_backoff_seconds"`
 	// 是否允许 OpenAI 刷新器同步覆盖关联的 Sora 账号 token（默认关闭）
 	SyncLinkedSoraAccounts bool `mapstructure:"sync_linked_sora_accounts"`
+}
+
+// AccountConnectivityProbeConfig 周期性用轻量模型对活跃账号做连通性探活（与 token 刷新互补）。
+type AccountConnectivityProbeConfig struct {
+	Enabled                  bool `mapstructure:"enabled"`
+	IntervalMinutes          int  `mapstructure:"interval_minutes"`
+	MaxConcurrency           int  `mapstructure:"max_concurrency"`
+	PerAccountTimeoutSeconds int  `mapstructure:"per_account_timeout_seconds"`
+	RunOnStart               bool `mapstructure:"run_on_start"`
+	// PersistResults 将每次探活结果写入 account_connectivity_probe_results，便于 SQL/运维查询。
+	PersistResults bool `mapstructure:"persist_results"`
+	// RetentionDays 保留天数；超过的记录在每轮探活结束后清理。0 表示不自动清理。
+	RetentionDays int `mapstructure:"retention_days"`
+	// ResponsePreviewMaxBytes 成功时落库的响应正文截断长度（字节级，避免大字段）。
+	ResponsePreviewMaxBytes int                                  `mapstructure:"response_preview_max_bytes"`
+	Models                  AccountConnectivityProbeModelsConfig `mapstructure:"models"`
+}
+
+// AccountConnectivityProbeModelsConfig 按平台指定探活模型；留空则沿用 AccountTestService 内置默认。
+type AccountConnectivityProbeModelsConfig struct {
+	OpenAIOAuth  string `mapstructure:"openai_oauth"`
+	OpenAIAPIKey string `mapstructure:"openai_apikey"`
+	Anthropic    string `mapstructure:"anthropic"`
+	Gemini       string `mapstructure:"gemini"`
+	Antigravity  string `mapstructure:"antigravity"`
 }
 
 type PricingConfig struct {
@@ -1505,6 +1531,21 @@ func setDefaults() {
 	viper.SetDefault("token_refresh.retry_backoff_seconds", 2)         // 重试退避基础2秒
 	viper.SetDefault("token_refresh.sync_linked_sora_accounts", false) // 默认不跨平台覆盖 Sora token
 
+	// 周期性账号连通性探活（默认关闭，避免大批量账号意外产生上游流量）
+	viper.SetDefault("account_connectivity_probe.enabled", false)
+	viper.SetDefault("account_connectivity_probe.interval_minutes", 10)
+	viper.SetDefault("account_connectivity_probe.max_concurrency", 8)
+	viper.SetDefault("account_connectivity_probe.per_account_timeout_seconds", 120)
+	viper.SetDefault("account_connectivity_probe.run_on_start", true)
+	viper.SetDefault("account_connectivity_probe.persist_results", true)
+	viper.SetDefault("account_connectivity_probe.retention_days", 7)
+	viper.SetDefault("account_connectivity_probe.response_preview_max_bytes", 1024)
+	viper.SetDefault("account_connectivity_probe.models.openai_oauth", "gpt-5.1-codex-mini")
+	viper.SetDefault("account_connectivity_probe.models.openai_apikey", "gpt-4o-mini")
+	viper.SetDefault("account_connectivity_probe.models.anthropic", "claude-3-5-haiku-20241022")
+	viper.SetDefault("account_connectivity_probe.models.gemini", "gemini-2.0-flash")
+	viper.SetDefault("account_connectivity_probe.models.antigravity", "claude-3-5-haiku-20241022")
+
 	// Gemini OAuth - configure via environment variables or config file
 	// GEMINI_OAUTH_CLIENT_ID and GEMINI_OAUTH_CLIENT_SECRET
 	// Default: uses Gemini CLI public credentials (set via environment)
@@ -2250,6 +2291,25 @@ func (c *Config) Validate() error {
 	}
 	if c.Concurrency.PingInterval < 5 || c.Concurrency.PingInterval > 30 {
 		return fmt.Errorf("concurrency.ping_interval must be between 5-30 seconds")
+	}
+	if c.AccountConnectivityProbe.Enabled {
+		if c.AccountConnectivityProbe.IntervalMinutes < 1 {
+			return fmt.Errorf("account_connectivity_probe.interval_minutes must be positive")
+		}
+		if c.AccountConnectivityProbe.MaxConcurrency < 1 {
+			return fmt.Errorf("account_connectivity_probe.max_concurrency must be positive")
+		}
+		if c.AccountConnectivityProbe.PerAccountTimeoutSeconds < 10 {
+			return fmt.Errorf("account_connectivity_probe.per_account_timeout_seconds must be at least 10")
+		}
+		if c.AccountConnectivityProbe.PersistResults {
+			if c.AccountConnectivityProbe.ResponsePreviewMaxBytes < 0 {
+				return fmt.Errorf("account_connectivity_probe.response_preview_max_bytes must be non-negative")
+			}
+			if c.AccountConnectivityProbe.RetentionDays < 0 {
+				return fmt.Errorf("account_connectivity_probe.retention_days must be non-negative")
+			}
+		}
 	}
 	return nil
 }

@@ -550,6 +550,24 @@ token_refresh:
   # 是否允许 OpenAI 刷新流程同步覆盖 linked_openai_account_id 关联的 Sora 账号 token
   sync_linked_sora_accounts: false
 
+# Periodic connectivity probe (lightweight "hi" style tests; complements token refresh)
+# 周期性连通性探活（轻量 hi 类请求；与 token 刷新互补，默认关闭）
+account_connectivity_probe:
+  enabled: false
+  interval_minutes: 10
+  max_concurrency: 8
+  per_account_timeout_seconds: 120
+  run_on_start: true
+  persist_results: true
+  retention_days: 7
+  response_preview_max_bytes: 1024
+  models:
+    openai_oauth: "gpt-5.1-codex-mini"
+    openai_apikey: "gpt-4o-mini"
+    anthropic: "claude-3-5-haiku-20241022"
+    gemini: "gemini-2.0-flash"
+    antigravity: "claude-3-5-haiku-20241022"
+
 # =============================================================================
 # API Key Auth Cache Configuration
 # API Key 认证缓存配置

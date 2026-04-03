@@ -365,6 +365,18 @@ func ProvideScheduledTestRunnerService(
 	return svc
 }
 
+// ProvideAccountConnectivityProbeService creates and starts AccountConnectivityProbeService.
+func ProvideAccountConnectivityProbeService(
+	accountRepo AccountRepository,
+	probeResultRepo AccountConnectivityProbeResultRepository,
+	accountTestSvc *AccountTestService,
+	cfg *config.Config,
+) *AccountConnectivityProbeService {
+	svc := NewAccountConnectivityProbeService(accountRepo, probeResultRepo, accountTestSvc, cfg)
+	svc.Start()
+	return svc
+}
+
 // ProvideOpsScheduledReportService creates and starts OpsScheduledReportService.
 func ProvideOpsScheduledReportService(
 	opsService *OpsService,
@@ -489,5 +501,6 @@ var ProviderSet = wire.NewSet(
 	ProvideIdempotencyCleanupService,
 	ProvideScheduledTestService,
 	ProvideScheduledTestRunnerService,
+	ProvideAccountConnectivityProbeService,
 	NewGroupCapacityService,
 )

@@ -1,0 +1,49 @@
+# 在 GitHub Actions（约 7GB RAM）上构建根目录 Dockerfile，推送到 GHCR。
+# 适合本机/VPS 内存小、本地 docker build 易卡死或 SSH 断连时使用。
+#
+# 使用：
+# 1. 把本仓库推到你自己的 GitHub（fork 或新仓库）
+# 2. Actions → 选本 workflow → Run workflow
+# 3. 若仓库是 private，镜像默认 private，需登录拉取：
+#    echo <TOKEN> | docker login ghcr.io -u USERNAME --password-stdin
+#    docker pull ghcr.io/<owner>/sub2api:manual
+# 4. 改 sub2api-deploy/docker-compose.yml 里 sub2api.image 为上述地址后 compose up
+
+name: Docker build (manual) → GHCR
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: GHCR 镜像名（必须小写）
+        run: echo "GHCR_IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: |
+            ${{ env.GHCR_IMAGE }}:manual
+            ${{ env.GHCR_IMAGE }}:manual-${{ github.sha }}
